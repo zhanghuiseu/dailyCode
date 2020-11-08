@@ -84,9 +84,11 @@ void LogFile::DeInit() {
             return;
         }
         LogFile::m_isInit = false;
-        logFilePtr->m_stopThreadFlag.store(true);
-        logFilePtr->m_logThread->join();
-
+    }
+    logFilePtr->m_stopThreadFlag.store(true);
+    logFilePtr->m_logThread->join();
+    {
+        std::lock_guard<std::mutex> lock(logFilePtr->m_logMutex);
         logFilePtr->m_encryptTools.clear();
         logFilePtr->m_lastCompressStamp = 0;
         if (logFilePtr->m_logFd) {
