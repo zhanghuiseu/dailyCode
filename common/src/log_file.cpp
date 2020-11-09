@@ -216,7 +216,7 @@ void LogFile::addZipRequest(std::shared_ptr<ZipLogCallBack> callBack) {
     m_zipCallBacks.insert(wpCallback);
 }
 
-void LogFile::recviveOneLog(LogLevel level, const char* level_str, const char* fileName,
+void LogFile::recviveOneLog(LogLevel level, const char* levelStr, const char* fileName,
                             const char* format, ...) {
     std::lock_guard<std::mutex> lock(m_logMutex);
     if (!LogFile::m_isInit) {
@@ -247,7 +247,7 @@ void LogFile::recviveOneLog(LogLevel level, const char* level_str, const char* f
     std::string appName = m_logConfStrMap[LC_LOG_APP_NAME];
     snprintf(m_logBuffer, rowLen, " %s [%d:%p] ", appName.c_str(), (int32_t)getpid(), (void*)this);
     int32_t len = strlen(m_logBuffer);
-    snprintf((char*)(m_logBuffer + len), rowLen - len, "%s [%s", level_str, finalfileName);
+    snprintf((char*)(m_logBuffer + len), rowLen - len, "%s [%s", levelStr, finalfileName);
     len = strlen(m_logBuffer);
 
     va_list args;
@@ -424,8 +424,6 @@ bool LogFile::enableCompress() {
 
 void LogFile::compressLogs() {
     if (!enableCompress()) {
-        fprintf(stderr, "%s [ERROR] %s-%d disable zip logs failed \n",
-                Utils::getCurrentSystemTime().c_str(), __FUNCTION__, __LINE__);
         return;
     }
 

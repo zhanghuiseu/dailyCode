@@ -10,6 +10,10 @@
 **************************************************************************/
 
 #pragma once
+// 流式日志输出
+#include <iostream>
+#include <sstream>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -39,7 +43,7 @@ class ZipLogCallBack {
 #define defaultLogFilesMaxCnt 3                // 默认3个日志文件
 #define defaultLogMaxFileSize 5 * 1024 * 1024  // 默认每个日志文件最多5M
 #define defaultLogNeedClear 1                  // 默认需要清理过过期日志
-#define defaultLogNeedPrintConsole 1           // 默认需要输出到终端
+#define defaultLogNeedPrintConsole 0           // 默认不需要输出到终端
 #define defauleLogNeedEncryption \
     0  // 默认不需要加密日志，默认不需要，目前提供xor、blowfish等加密策略
 #define defaultXorEncryptKey "qwertyuiop"       // 默认xor加密算法的key
@@ -105,7 +109,7 @@ class LogFile : public SingleTon<LogFile> {
     void addZipRequest(std::shared_ptr<ZipLogCallBack> callBack);
 
     // 写日志
-    void recviveOneLog(LogLevel level, const char* level_str, const char* fileName,
+    void recviveOneLog(LogLevel level, const char* levelStr, const char* fileName,
                        const char* format, ...);
 
  private:
@@ -127,10 +131,10 @@ class LogFile : public SingleTon<LogFile> {
 
  private:
     static bool m_isInit;
+    char* m_logBuffer;
     std::mutex m_logMutex;
     std::map<int32_t, int32_t> m_logConfIntMap;
     std::map<int32_t, std::string> m_logConfStrMap;
-    char* m_logBuffer;
     std::map<int32_t, std::shared_ptr<baseEncrypt>> m_encryptTools;
 
  private:
@@ -147,6 +151,40 @@ class LogFile : public SingleTon<LogFile> {
     std::set<std::weak_ptr<ZipLogCallBack>, std::owner_less<std::weak_ptr<ZipLogCallBack>>>
         m_zipCallBacks;
 };
+
+// 流失输出日志辅助类
+class StreamLogHelper {
+ public:
+    StreamLogHelper(LogLevel level, const char* levelStr, const char* codeFileName,
+                    const char* codeFunction, const int32_t codeLine)
+        : m_level(level),
+          m_levelStr(levelStr),
+          m_codeFileName(codeFileName),
+          m_codeFunction(codeFunction),
+          m_codeLine(codeLine) {}
+
+    template <typename T>
+    StreamLogHelper& operator<<(const T& t) {
+        ss << t;
+        return *this;
+    }
+
+    ~StreamLogHelper() {
+        SingleTon<LogFile>::Instance()->recviveOneLog(m_level, m_levelStr, m_codeFileName,
+                                                      "-%s:%d] %s", m_codeFunction, m_codeLine,
+                                                      ss.str().c_str());
+        ss.clear();
+    }
+
+ private:
+    LogLevel m_level;
+    const char* m_levelStr;
+    const char* m_codeFileName;
+    const char* m_codeFunction;
+    const int32_t m_codeLine;
+    std::stringstream ss;
+};
+
 }  // end namespace dailycode
 
 /*************  LOG CONF API  *************/
@@ -157,7 +195,11 @@ class LogFile : public SingleTon<LogFile> {
     SingleTon<LogFile>::Instance()->setEncryptKey(encryptType, key)
 #define LOG_GET_ENCRYPT_KEY(encryptType) SingleTon<LogFile>::Instance()->getEncryptKey(encryptType)
 
+// 压缩日志请求
+#define LOG_ZIP_REQUEST(callback) SingleTon<LogFile>::Instance()->addZipRequest(callback)
+
 /*************  LOG API  *************/
+// C风格日志输出
 #define LOGT(format, args...)                                                                \
     SingleTon<LogFile>::Instance()->recviveOneLog(LogLevel::LL_LOG_TRACE, "T", __FILE__,     \
                                                   "-%s:%d] " format, __FUNCTION__, __LINE__, \
@@ -174,4 +216,12 @@ class LogFile : public SingleTon<LogFile> {
     SingleTon<LogFile>::Instance()->recviveOneLog(LogLevel::LL_LOG_ERROR, "E", __FILE__,     \
                                                   "-%s:%d] " format, __FUNCTION__, __LINE__, \
                                                   ##args)
-#define LOG_ZIP_REQUEST(callback) SingleTon<LogFile>::Instance()->addZipRequest(callback)
+
+// 日志流方式输出接口
+#define STREAM_LOG_HELPER(LOGLEVEL, LEVEL_STR, FILE, FUNCTION, LINE) \
+    StreamLogHelper(LOGLEVEL, LEVEL_STR, FILE, FUNCTION, LINE)
+
+#define SLOGT() STREAM_LOG_HELPER(LogLevel::LL_LOG_TRACE, "T", __FILE__, __FUNCTION__, __LINE__)
+#define SLOGI() STREAM_LOG_HELPER(LogLevel::LL_LOG_INFO, "I", __FILE__, __FUNCTION__, __LINE__)
+#define SLOGW() STREAM_LOG_HELPER(LogLevel::LL_LOG_WARN, "W", __FILE__, __FUNCTION__, __LINE__)
+#define SLOGE() STREAM_LOG_HELPER(LogLevel::LL_LOG_ERROR, "E", __FILE__, __FUNCTION__, __LINE__)
